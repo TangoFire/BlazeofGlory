@@ -214,23 +214,36 @@ IEnumerator SpreadFireRoutine()
     }
 
     // 🔥 Extinguish Fire and Remove it from the Game
-    public void ExtinguishFire(float amount)
-    {
-        if (isExtinguished) return;  // Prevent re-extinguishing if already done
+   public void ExtinguishFire(float amount)
+{
+    // Only reduce intensity if not already extinguished
+    if (isExtinguished) return; 
 
+    // Reduce the fire intensity gradually
+    intensity -= amount;
+    
+    // Prevent intensity from going below zero
+    if (intensity < 0) intensity = 0f;
+
+    // Check if the fire is completely extinguished
+    if (intensity <= extinguishThreshold)
+    {
         isExtinguished = true;  // Mark the fire as extinguished
         currentFireCount--;  // Decrease the total fire count
 
-        // Reduce the room temperature when a fire is extinguished
+        // Optionally reduce room temperature over time
         Fire.currentTemperature -= amount;
         if (Fire.currentTemperature < 20f) Fire.currentTemperature = 20f;  // Prevent going below room temperature
 
-        Debug.Log($"💦 Fire extinguished by {amount}!");  // Log the fire extinguish
+        Debug.Log($"💦 Fire extinguished by {amount}!");
 
-        // Destroy the fire object if the room temperature is cool enough
-        if (Fire.currentTemperature <= 20f)
-        {
-            Destroy(gameObject);  // Remove the fire from the game world
-        }
+        Destroy(gameObject);  // Destroy the fire object
     }
+    else
+    {
+        // If the fire is not yet extinguished, update visuals (you could change the visual appearance or emit smoke, etc.)
+        UpdateFireVisuals();
+    }
+}
+
 }
