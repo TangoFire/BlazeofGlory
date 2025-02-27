@@ -5,29 +5,29 @@ using UnityEngine;
 public class Fire : MonoBehaviour
 {
     // 🔥 Fire Properties
-    public float intensity = 1.0f;  // Controls fire strength
-    public float spreadDelay = 1.0f;  // Delay before spreading
-    public float spreadRange = 2.0f;  // Fire spread distance
-    public float extinguishThreshold = 0.1f;  // When fire dies out
+    public float intensity = 1.0f;  // Controls the strength/intensity of the fire
+    public float spreadDelay = 1.0f;  // Delay before the fire attempts to spread again
+    public float spreadRange = 1.0f;  // Fire spread distance (how far the fire can spread)
+    public float extinguishThreshold = 0.1f;  // Threshold below which the fire is considered extinguished
 
     // 🌡️ Temperature Mechanics
-    public float temperatureIncrease = 2f;  // Temperature increase per fire
-    public static float currentTemperature = 20f;  // Global temperature
-    public static float maxTemperature = 100f;  // Evacuation trigger
+    public float temperatureIncrease = 2f;  // Temperature increase per fire spawned
+    public static float currentTemperature = 20f;  // Global room temperature, starts at room temp
+    public static float maxTemperature = 100f;  // Temperature threshold for evacuation
 
     // 🔥 Fire Control
-    private bool isSpreading = false;
-    private bool isExtinguished = false;
+    private bool isSpreading = false;  // Prevents spreading while it's already in progress
+    private bool isExtinguished = false;  // Tracks if the fire has been extinguished
 
     // 🔥 Visuals & Object References
-    public GameObject fireParticlePrefab;
-    private SpriteRenderer fireSpriteRenderer;
+    public GameObject fireParticlePrefab;  // The fire particle prefab to spawn
+    private SpriteRenderer fireSpriteRenderer;  // The SpriteRenderer for fire visuals
 
     // 🔥 Room & Fire Limits
-    public Collider2D roomCollider;
-    public float maxFires = 10;  // Max fires that can exist at once
-    private static int currentFireCount = 0;  // Current fire count
-    private List<Vector2> previousFirePositions = new List<Vector2>();  // Tracks previous fire positions
+    public Collider2D roomCollider;  // Collider for the room's boundaries (used to limit spread area)
+    public float maxFires = 10;  // The maximum number of fires allowed at once
+    private static int currentFireCount = 0;  // Keeps track of how many fires are currently active
+    private List<Vector2> previousFirePositions = new List<Vector2>();  // Tracks previously spawned fire positions
 
     void Start()
     {
@@ -38,87 +38,112 @@ public class Fire : MonoBehaviour
             Debug.LogError("🔥 Fire Particle Prefab is missing!");
 
         // Start fire spread and temperature increase routines
-        StartCoroutine(SpreadFireRoutine());
-        StartCoroutine(IncreaseTemperatureOverTime());
+        StartCoroutine(SpreadFireRoutine());  // Begin the fire spread process
+        StartCoroutine(IncreaseTemperatureOverTime());  // Begin increasing temperature over time
     }
-
-    // 🔥 Fire Spreading Routine
-    IEnumerator SpreadFireRoutine()
+// 🔥 Fire Spreading Routine with Variable Spread Chance
+IEnumerator SpreadFireRoutine()
+{
+    while (!isExtinguished)  // Continue spreading until the fire is extinguished
     {
-        while (!isExtinguished)
+        if (!isSpreading)  // Check if a spread action is already in progress
         {
-            if (!isSpreading)
+            isSpreading = true;
+
+            // Introduce a random delay before attempting to spread again (0.1s delay as per your change)
+            float randomDelay = 0.1f;
+            yield return new WaitForSeconds(randomDelay);
+
+            // Only spread fire if we haven't reached the max fire count
+            if (currentFireCount < maxFires)
             {
-                isSpreading = true;
-
-                // Delay before attempting to spread the fire again
-                yield return new WaitForSeconds(spreadDelay);
-
-                // If we haven't reached the max fire count, try spreading fire
-                if (currentFireCount < maxFires)
+                // Determine if this fire should attempt to spread (e.g., 15% chance)
+                float spreadChance = Random.Range(0f, 1f);
+                if (spreadChance <= 0.15f)  // 15% chance to spread each time (lower chance)
                 {
-                    Vector2 randomPosition = new Vector2(
-                        Random.Range(roomCollider.bounds.min.x, roomCollider.bounds.max.x),
-                        Random.Range(roomCollider.bounds.min.y, roomCollider.bounds.max.y)
-                    );
-
-                    // Attempt to spread fire at the random position
-                    SpreadFireInRoom(randomPosition);
+                    Vector2 spawnPosition = GetNextFirePosition();  // Get the next valid position for fire to spawn
+                    SpreadFireInRoom(spawnPosition);  // Spread fire at the calculated position
                 }
                 else
                 {
-                    // If max fires reached, wait longer before retrying
-                    yield return new WaitForSeconds(2f);  // Buffer time to prevent rapid spawning
+                    // If fire doesn't spread, delay before the next check
+                    yield return new WaitForSeconds(0.5f);  // Adjust delay if you want slower spreading
                 }
-
-                isSpreading = false;
+            }
+            else
+            {
+                // Wait for a longer time before attempting to spread again when max fires are reached
+                yield return new WaitForSeconds(2f);  
             }
 
-            yield return null;
+            isSpreading = false;  // Allow next spread attempt after delay
         }
+
+        yield return null;  // Wait until the next frame
+    }
+}
+
+
+
+    // 🔥 Calculate Next Fire Position
+    Vector2 GetNextFirePosition()
+    {
+        // Get a random point within the room collider, slightly adjusting to simulate fire growing
+        Vector2 randomPosition = new Vector2(
+            Random.Range(roomCollider.bounds.min.x, roomCollider.bounds.max.x),
+            Random.Range(roomCollider.bounds.min.y, roomCollider.bounds.max.y)
+        );
+
+        // Fire will tend to spread around areas where previous fires occurred, so we adjust here if needed
+        if (previousFirePositions.Count > 0)
+        {
+            randomPosition = Vector2.Lerp(randomPosition, previousFirePositions[Random.Range(0, previousFirePositions.Count)], 0.5f);
+        }
+
+        return randomPosition;
     }
 
     // 🔥 Spread Fire in Room
     public void SpreadFireInRoom(Vector2 position)
     {
-        // Ensure necessary references are set
+        // Ensure necessary references are set before attempting to spawn fire
         if (fireParticlePrefab == null || roomCollider == null)
         {
             Debug.LogError("🔥 Missing Fire Prefab or Room Collider!");
             return;
         }
 
-        // Check if fire position is valid (not too close to another fire)
+        // Validate the fire position, ensuring it’s not too close to another fire
         if (!IsValidFirePosition(position))
         {
             Debug.Log($"🔥 Fire cannot spread to {position}, invalid position.");
             return;
         }
 
-        // Instantiate new fire at the valid position
+        // Spawn new fire at the valid position
         GameObject newFire = Instantiate(fireParticlePrefab, position, Quaternion.identity);
         Fire fireComponent = newFire.GetComponent<Fire>();
 
         if (fireComponent != null)
         {
-            // Increase fire intensity slightly when spreading
-            fireComponent.StartFire(intensity * 1.1f);
-            IncreaseTemperature();  // Increase temperature due to new fire
-            currentFireCount++;  // Increment fire count
-            previousFirePositions.Add(position);  // Store fire position
-        }
+            // Increase intensity slightly for each new spread to simulate fire growing
+            fireComponent.StartFire(intensity * 1.1f);  
+            IncreaseTemperature();  // Increase temperature due to new fire spreading
+            currentFireCount++;  // Increment the fire count
+            previousFirePositions.Add(position);  // Store the position of the new fire
 
-        Debug.Log($"🔥 Fire spread to {position}. Total Fires: {currentFireCount}");
+            Debug.Log($"🔥 Fire spread to {position}. Total Fires: {currentFireCount}");
+        }
 
         // Warn when the max fire count is reached
         if (currentFireCount >= maxFires)
             Debug.LogWarning("🔥 Maximum fire limit reached.");
     }
 
-    // ✅ Check if Fire Can Spread Here
+    // ✅ Check if Fire Can Spread Here (Validates if fire can spawn at this position)
     private bool IsValidFirePosition(Vector2 position)
     {
-        // Check all colliders within the spread range of the position
+        // Check all colliders within the spread range of the position to prevent overlap
         Collider2D[] hitColliders = Physics2D.OverlapCircleAll(position, spreadRange);
 
         foreach (var hitCollider in hitColliders)
@@ -131,20 +156,20 @@ public class Fire : MonoBehaviour
 
                 // Relaxed threshold for fire proximity, allowing fires to spawn closer
                 if (distance < spreadRange * 0.9f)  // Fires can spawn closer, but not too close
-                    return false;  // Reject spawn if they are too close
+                    return false;  // Reject spawn if too close to another fire
             }
         }
 
-        return true;  // Fire can spawn in this position
+        return true;  // Fire can spawn at this position
     }
 
     // 🔥 Start Fire & Update Visuals
     public void StartFire(float initialIntensity)
     {
-        if (isExtinguished) return;  // Don't start fire if it's already extinguished
+        if (isExtinguished) return;  // Prevent fire start if it’s already extinguished
 
-        intensity = initialIntensity;  // Set fire intensity
-        UpdateFireVisuals();  // Update visual appearance of the fire
+        intensity = initialIntensity;  // Set the fire intensity based on the spread logic
+        UpdateFireVisuals();  // Update the visual appearance of the fire based on its intensity
         Debug.Log($"🔥 Fire started with intensity: {intensity}");
     }
 
@@ -153,7 +178,7 @@ public class Fire : MonoBehaviour
     {
         if (fireSpriteRenderer != null)
         {
-            // Adjust fire color and size based on intensity
+            // Adjust the fire’s transparency and scale based on intensity
             fireSpriteRenderer.color = new Color(1f, 1f, 1f, intensity / 3f);
             fireSpriteRenderer.transform.localScale = Vector3.one * (0.5f + intensity * 0.2f);
         }
@@ -162,13 +187,13 @@ public class Fire : MonoBehaviour
     // 🌡️ Increase Temperature Over Time
     IEnumerator IncreaseTemperatureOverTime()
     {
-        while (!isExtinguished)
+        while (!isExtinguished)  // Continue until the fire is extinguished
         {
             // Increase temperature as long as there are fires
             if (currentFireCount > 0)
                 IncreaseTemperature();
 
-            // Increase temperature every few seconds
+            // Increase temperature more quickly if there are more fires
             float delay = (currentFireCount > 5) ? 10f : 5f;  // Delay longer with more fires
             yield return new WaitForSeconds(delay);
         }
@@ -177,13 +202,13 @@ public class Fire : MonoBehaviour
     // 🌡️ Increase Temperature
     private void IncreaseTemperature()
     {
-        currentTemperature += temperatureIncrease;
+        currentTemperature += temperatureIncrease;  // Increase the temperature due to fire presence
         if (currentTemperature > maxTemperature)
-            currentTemperature = maxTemperature;
+            currentTemperature = maxTemperature;  // Prevent temperature from exceeding max limit
 
         Debug.Log($"🔥 Room temperature: {currentTemperature}°C");
 
-        // Trigger evacuation if temperature is too high
+        // Trigger evacuation if temperature exceeds the max threshold
         if (currentTemperature >= maxTemperature)
             GameManager.TriggerEvacuation();
     }
@@ -191,21 +216,21 @@ public class Fire : MonoBehaviour
     // 🔥 Extinguish Fire and Remove it from the Game
     public void ExtinguishFire(float amount)
     {
-        if (isExtinguished) return;  // Don't extinguish if already done
+        if (isExtinguished) return;  // Prevent re-extinguishing if already done
 
-        isExtinguished = true;  // Mark as extinguished
-        currentFireCount--;  // Reduce fire count
+        isExtinguished = true;  // Mark the fire as extinguished
+        currentFireCount--;  // Decrease the total fire count
 
-        // Reduce heat when fire is extinguished
+        // Reduce the room temperature when a fire is extinguished
         Fire.currentTemperature -= amount;
-        if (Fire.currentTemperature < 20f) Fire.currentTemperature = 20f;  // Prevent temperature from going below room temperature
+        if (Fire.currentTemperature < 20f) Fire.currentTemperature = 20f;  // Prevent going below room temperature
 
-        Debug.Log($"💦 Fire extinguished by {amount}!");
+        Debug.Log($"💦 Fire extinguished by {amount}!");  // Log the fire extinguish
 
-        // Remove fire from scene if the temperature is sufficiently low
+        // Destroy the fire object if the room temperature is cool enough
         if (Fire.currentTemperature <= 20f)
         {
-            Destroy(gameObject);  // Destroy the fire game object
+            Destroy(gameObject);  // Remove the fire from the game world
         }
     }
 }
