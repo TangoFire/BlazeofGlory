@@ -33,24 +33,25 @@ public class WaterProjectile : MonoBehaviour
     }
 
     // Detect collision with fire
-    void OnCollisionEnter2D(Collision2D collision)
+   void OnTriggerEnter2D(Collider2D collision)
+{
+    if (collision.CompareTag("Fire"))
     {
-        if (collision.gameObject.CompareTag("Fire"))
+        Fire fire = collision.GetComponent<Fire>();
+
+        if (fire != null)
         {
-            Fire fire = collision.gameObject.GetComponent<Fire>();
-            
-            if (fire != null)
-            {
-                fire.ExtinguishFire(extinguishAmount);
-                PlayWaterSplashEffect(collision.contacts[0].point);
-                Destroy(gameObject);
-            }
-            else
-            {
-                Debug.LogError("🚨 Fire component NOT FOUND on object tagged as 'Fire': " + collision.gameObject.name);
-            }
+            fire.ExtinguishFire(extinguishAmount);
+            PlayWaterSplashEffect(collision.transform.position);  // Use position to create splash effect
+            Destroy(gameObject);
+        }
+        else
+        {
+            Debug.LogError("🚨 Fire component NOT FOUND on object tagged as 'Fire': " + collision.gameObject.name);
         }
     }
+}
+
 
     // Optionally add a method to play visual/audio effects when the water hits the fire
     void PlayWaterSplashEffect(Vector2 position)
