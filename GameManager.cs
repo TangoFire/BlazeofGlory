@@ -1,90 +1,51 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
-    // References to active fires in the scene
-    private List<Fire> activeFires = new List<Fire>();
+    public static GameManager instance;
 
-    // Current temperature in the room
-    public float currentTemperature = 20f;  // Room temperature starts at 20°C
+    public List<Fire> activeFires = new List<Fire>();
+    public static float currentTemperature = 20f;
+    public float maxTemperature = 100f;
     
+    private bool evacuationTriggered = false;
 
-    void Start()
+    void Awake()
     {
-        // Find all fires in the scene at the start of the game
-        FindAllFires();
+        if (instance == null)
+            instance = this;
     }
 
     void Update()
     {
-        // Update the temperature based on all fires
-        UpdateRoomTemperature();
+        currentTemperature = Fire.currentTemperature;
 
+        if (currentTemperature >= 80f && currentTemperature < 90f)
+            Debug.LogWarning("🔥 Danger! Temperature is rising! Evacuate soon!");
 
-        // Optionally, perform actions based on temperature
-        HandleTemperatureEffects();
+        if (currentTemperature >= 90f && currentTemperature < maxTemperature)
+            Debug.LogWarning("🔥 WARNING: Near Critical Heat Levels!");
+
+        if (currentTemperature >= maxTemperature && !evacuationTriggered)
+            TriggerEvacuation();
     }
 
-    // Find all fire objects in the scene and add them to the active fires list
-    void FindAllFires()
+    public static void TriggerEvacuation()
     {
-        Fire[] fireObjects = Object.FindObjectsByType<Fire>(FindObjectsSortMode.None);  // Use the new method for finding objects
-        activeFires = new List<Fire>(fireObjects);
+        if (instance.evacuationTriggered) return;
+
+        instance.evacuationTriggered = true;
+        Debug.LogError("🚨 EVACUATION TRIGGERED! TEMPERATURE TOO HIGH! 🚨");
+
+        instance.StartCoroutine(instance.EvacuationCountdown());
     }
 
-    // Update the current room temperature based on active fires
-    void UpdateRoomTemperature()
+    IEnumerator EvacuationCountdown()
     {
-        currentTemperature = 20f;  // Reset temperature to a base value (room temperature)
-
-        // Loop through each fire in the scene and increase the temperature
-        foreach (Fire fire in activeFires)
-        {
-            // Increase the room temperature based on the fire's spread and intensity
-            currentTemperature += fire.temperatureIncrease;
-        }
-
-        // Ensure the temperature doesn't exceed the maximum limit (e.g., 100°C)
-        if (currentTemperature > 100f)
-        {
-            currentTemperature = 100f;
-        }
-    }
-
-    // Handle events triggered by high temperature
-    void HandleTemperatureEffects()
-    {
-        // Example: If the temperature exceeds a threshold, trigger certain events
-        if (currentTemperature > 50f)
-        {
-            // Maybe cause more fires to start or damage structures
-            Debug.Log("Warning! High temperature! More danger approaching!");
-        }
-
-        // Handle other possible game events (e.g., collapsing structures)
-        if (currentTemperature > 75f)
-        {
-            // Trigger an emergency situation, like the room being completely engulfed
-            TriggerEmergencyEvacuation();
-        }
-    }
-
-    // Handle emergency actions (for example, fire spreading uncontrollably)
-    void TriggerEmergencyEvacuation()
-    {
-        // Here we could add logic for triggering certain actions when the room is too hot
-        Debug.Log("Emergency! The room is too hot! Take immediate action!");
-
-        // You can add other game mechanics here, like doors being locked or certain exits being blocked
-    }
-
-    // Optional: You could have a method to manually trigger fire spread for testing purposes
-    public void TriggerFireSpread()
-    {
-        foreach (Fire fire in activeFires)
-        {
-            fire.SpreadFireInRoom();  // Trigger the fire spread in each active fire (make sure SpreadFireInRoom is public)
-        }
+        yield return new WaitForSeconds(30f);
+        Debug.LogError("🚨 FINAL EVACUATION! GAME OVER! 🚨");
+        // Here you can add logic to end the game or show an evacuation screen.
     }
 }

@@ -15,7 +15,7 @@ public class PlayerController : MonoBehaviour
     public float dashDuration = 0.2f;  // Duration of dash
     public float dashCooldown = 1f;  // Cooldown between dashes
     private bool isDashing = false;  // Flag to check if player is dashing
-    private float dashTime = 0f;  // Timer for dash duration
+   
     private float lastDashTime = -999f;  // Last time dash was performed
 
     private Vector2 moveDirection;  // The direction the player is moving
@@ -83,32 +83,43 @@ public class PlayerController : MonoBehaviour
         if (waterStreamPrefab == null)
         {
             Debug.LogError("🚨 Water stream prefab is not assigned!");
-            return;  // Exit if prefab is missing
+            return;  // Exit early if prefab is missing
         }
 
-        // If the current water stream is null or paused, create or reset the particle system
+        // If the current water stream is null, invalid, or paused, reset or create a new particle system
         if (currentWaterStream == null || currentWaterStream.gameObject == null || isWaterStreamPaused)
         {
             Debug.LogWarning("💧 Water stream is invalid or paused, resetting...");
 
-            // If paused, resume the water stream
+            // If the stream is paused, resume it
             if (isWaterStreamPaused)
             {
                 ResumeWaterStream();
             }
             else
             {
-                // Instantiate a new water stream if none exists
+                // If the stream doesn't exist, instantiate a new one
                 if (currentWaterStream == null)
                 {
+                    Debug.Log("💧 Instantiating new water stream...");
                     currentWaterStream = Instantiate(waterStreamPrefab, firePoint.position, Quaternion.identity).GetComponent<ParticleSystem>();
-                    currentWaterStream.transform.SetParent(firePoint);  // Attach the stream to firePoint
+
+                    // Ensure the ParticleSystem was properly retrieved from the prefab
+                    if (currentWaterStream == null)
+                    {
+                        Debug.LogError("🚨 ParticleSystem could not be retrieved from water stream prefab!");
+                        return;  // Exit if ParticleSystem is missing
+                    }
+
+                    // Attach the water stream to the firePoint
+                    currentWaterStream.transform.SetParent(firePoint);
                 }
                 else
                 {
                     // If the stream exists but is invalid, reset it
+                    Debug.Log("💧 Resetting existing water stream...");
                     currentWaterStream.Clear();  // Clear the particle system
-                    currentWaterStream.Play();  // Play the particle system
+                    currentWaterStream.Play();  // Restart the particle system
                 }
             }
         }
@@ -116,8 +127,13 @@ public class PlayerController : MonoBehaviour
         // Rotate the firePoint to face the mouse direction
         RotateHoseToMouse();
 
-        // Modify particle system properties for realistic water stream
+        // Modify particle system properties for realistic water stream behavior
         var mainModule = currentWaterStream.main;
+
+        // Debugging log for MainModule
+        Debug.Log("💧 Modifying MainModule settings...");
+
+        // Set speed, lifetime, gravity, and simulation space
         mainModule.startSpeed = waterForce * 3.5f;  // Boost speed to make water spray outward
         mainModule.startLifetime = 0.2f;  // Short lifetime for water particles
         mainModule.gravityModifier = 0.01f;  // Slight gravity effect to simulate water falling
@@ -134,17 +150,26 @@ public class PlayerController : MonoBehaviour
         var velocityModule = currentWaterStream.velocityOverLifetime;
         velocityModule.enabled = true;
         velocityModule.space = ParticleSystemSimulationSpace.Local;  // Apply velocity in local space
-        velocityModule.x = new ParticleSystem.MinMaxCurve(1f * waterForce);  // Apply force to the x-axis
-        velocityModule.y = new ParticleSystem.MinMaxCurve(1f * waterForce);  // Apply force to the y-axis
+
+        // Apply force based on direction
+        velocityModule.x = new ParticleSystem.MinMaxCurve(1f * waterForce);
+        velocityModule.y = new ParticleSystem.MinMaxCurve(1f * waterForce);
 
         var noiseModule = currentWaterStream.noise;
         noiseModule.enabled = true;
         noiseModule.strength = 0.15f;  // Add some random movement to the stream
         noiseModule.frequency = 2.5f;  // Control the frequency of noise for realism
 
-        currentWaterStream.Play();  // Start playing the particle system
-        UpdateWaterStream();  // Additional updates for the stream
+        // Ensure the particle system is playing
+        if (!currentWaterStream.isPlaying)
+        {
+            currentWaterStream.Play();  // Start playing the particle system
+        }
 
+        // Update the water stream position and behavior
+        UpdateWaterStream();
+
+        // Set the stream as not paused after it's been started or resumed
         isWaterStreamPaused = false;  // Mark the stream as not paused
     }
 
@@ -155,7 +180,7 @@ public class PlayerController : MonoBehaviour
         {
             Debug.Log("💧 Pausing water stream...");
 
-            // Stop the emission of particles
+            // Stop the emission of particles by setting rateOverTime to 0
             var emissionModule = currentWaterStream.emission;
             emissionModule.rateOverTime = 0f;  // Set emission rate to 0 to stop particles
 
@@ -213,50 +238,38 @@ public class PlayerController : MonoBehaviour
         // Calculate direction from firePoint to mouse position
         Vector2 direction = (mousePosition - firePoint.position).normalized;
 
-        // Apply rotation to both firePoint and water stream to ensure proper direction
-        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-        firePoint.rotation = Quaternion.Euler(0, 0, angle);
-        currentWaterStream.transform.rotation = Quaternion.Euler(0, 0, angle);
-
-        // Adjust velocity to match the new direction
-        var velocityModule = currentWaterStream.velocityOverLifetime;
-        velocityModule.x = new ParticleSystem.MinMaxCurve(direction.x * waterForce * 3);
-        velocityModule.y = new ParticleSystem.MinMaxCurve(direction.y * waterForce * 3);
+        // Update stream direction and firePoint rotation
+        currentWaterStream.transform.up = direction;
+        RotateHoseToMouse();
     }
 
-    // Handle dash logic
+    // Handle dash input and movement
     void HandleDash()
     {
-        if (Time.time - lastDashTime > dashCooldown && Input.GetKeyDown(KeyCode.Space))
+        if (Input.GetKeyDown(KeyCode.Space) && Time.time - lastDashTime >= dashCooldown)
         {
-            StartDash();  // Initiate dash
-        }
-
-        if (isDashing)
-        {
-            DashMovement();  // Execute dash movement
+            StartCoroutine(Dash());  // Start the dash coroutine
+            lastDashTime = Time.time;  // Update the last dash time
         }
     }
 
-    // Start the dash action
-    void StartDash()
+    // Coroutine to handle dash logic
+    IEnumerator Dash()
     {
-        isDashing = true;
-        dashTime = dashDuration;
-        lastDashTime = Time.time;
-    }
+        isDashing = true;  // Set the dashing flag to true
+        float dashStartTime = Time.time;
 
-    // Execute dash movement
-    void DashMovement()
-    {
-        dashTime -= Time.deltaTime;
-        if (dashTime <= 0)
+        // Dash in the direction the player is facing
+        Vector2 dashDirection = moveDirection != Vector2.zero ? moveDirection : Vector2.up;
+
+        // Apply dash movement
+        while (Time.time < dashStartTime + dashDuration)
         {
-            isDashing = false;  // Stop dashing after duration
+            rb.linearVelocity = dashDirection * dashSpeed;  // Set dash velocity
+            yield return null;
         }
-        else
-        {
-            rb.linearVelocity = moveDirection * dashSpeed;  // Dash with enhanced speed
-        }
+
+        rb.linearVelocity = Vector2.zero;  // Stop movement after dash duration
+        isDashing = false;  // Reset the dashing flag
     }
 }

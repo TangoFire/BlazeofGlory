@@ -22,35 +22,32 @@ public class WaterProjectile : MonoBehaviour
 
     // Detect collision with fire
     // Check if the projectile hits something with the tag "Fire"
-      void OnCollisionEnter2D(Collision2D collision)
-{
-    if (collision.gameObject.CompareTag("Fire"))
+    void OnCollisionEnter2D(Collision2D collision)
     {
-        Fire fire = collision.gameObject.GetComponent<Fire>();
-        
-        if (fire != null)
+        if (collision.gameObject.CompareTag("Fire"))
         {
-            // Call method to extinguish the fire based on the projectile's extinguishAmount
-            fire.ExtinguishFire(extinguishAmount);
-
-            // Optionally play a sound effect or particle effect (e.g., splash sound)
-            PlayWaterSplashEffect(collision.contacts[0].point);
-
-            // Destroy the water projectile after hitting the fire
-            Destroy(gameObject);
+            Fire fire = collision.gameObject.GetComponent<Fire>();
+            
+            if (fire != null)
+            {
+                fire.ExtinguishFire(extinguishAmount);
+                PlayWaterSplashEffect(collision.contacts[0].point);
+                Destroy(gameObject);
+            }
+            else
+            {
+                Debug.LogError("🚨 Fire component NOT FOUND on object tagged as 'Fire': " + collision.gameObject.name);
+            }
         }
     }
-}
 
-// Optionally add a method to play visual/audio effects when the water hits the fire
-void PlayWaterSplashEffect(Vector2 position)
-{
-    // Example: Play sound effect
-    // AudioManager.PlaySound("WaterSplash");
+    // Optionally add a method to play visual/audio effects when the water hits the fire
+    void PlayWaterSplashEffect(Vector2 position)
+    {
+        // Example: Play sound effect
+        // AudioManager.PlaySound("WaterSplash");
 
-    // Example: Instantiate a particle effect at the position of collision
-    // Instantiate(waterSplashParticle, position, Quaternion.identity);
-}
-
+        // Example: Instantiate a particle effect at the position of collision
+        // Instantiate(waterSplashParticle, position, Quaternion.identity);
     }
-
+}
